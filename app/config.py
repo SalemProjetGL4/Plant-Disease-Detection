@@ -1,14 +1,20 @@
-from __future__ import annotations
+import torch
+from torchvision import transforms
 
-DEFAULT_IMAGE_SIZE = 128
-DEFAULT_MEAN = [0.485, 0.456, 0.406]
-DEFAULT_STD = [0.229, 0.224, 0.225]
-BACKBONES = [
-    "resnet18",
-    "resnet34",
-    "resnet50",
-    "efficientnet_b0",
-    "mobilenet_v3_small",
-    "densenet121",
-]
-SUPPORTED_IMAGE_TYPES = ["jpg", "jpeg", "png", "bmp", "webp"]
+# ── Device ────────────────────────────────────────────────────────────────────
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# ── Image settings ────────────────────────────────────────────────────────────
+IMG_SIZE = 224
+MEAN     = [0.485, 0.456, 0.406]
+STD      = [0.229, 0.224, 0.225]
+
+IMAGENET_MEAN = torch.tensor(MEAN).view(3, 1, 1)
+IMAGENET_STD  = torch.tensor(STD).view(3, 1, 1)
+
+# ── Inference transform ───────────────────────────────────────────────────────
+infer_transform = transforms.Compose([
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(MEAN, STD),
+])

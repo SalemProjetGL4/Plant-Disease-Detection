@@ -1,30 +1,46 @@
-from __future__ import annotations
-
 import torch
+import numpy as np
+from PIL import Image
+
+from config import DEVICE, infer_transform
 
 
-def predict_probabilities(model: torch.nn.Module, input_tensor: torch.Tensor, device_name: str) -> torch.Tensor:
-    device = torch.device(device_name)
+def preprocess(pil_img: Image.Image) -> torch.Tensor:
+    """
+    Apply evaluation-style preprocessing (resize + normalize) and add batch dimension.
+    Returns a tensor of shape (1, 3, 224, 224) on DEVICE.
+    """
+    return infer_transform(pil_img).unsqueeze(0).to(DEVICE)
+
+
+def predict(model: torch.nn.Module, tensor: torch.Tensor) -> np.ndarray:
+    """
+    Run a forward pass and return softmax probabilities as a numpy array.
+
+    Args:
+        model  — trained model in eval mode
+        tensor — preprocessed image tensor (1, 3, H, W)
+
+    Returns:
+        probs — numpy array of shape (num_classes,)
+    """
     with torch.no_grad():
-        outputs = model(input_tensor.to(device))
-    if isinstance(outputs, (tuple, list)):
-        outputs = outputs[0]
-    probabilities = torch.softmax(outputs, dim=1).squeeze(0).cpu()
-    return probabilities
+        logits = model(tensor)
+        probs  = torch.softmax(logits, dim=1)[0].cpu().numpy()
+    return probs
 
 
-def build_thinking_steps(
-    original_shape: tuple[int, int, int],
-    image_size: int,
-    mean_values: list[float],
-    std_values: list[float],
-    top1_label: str,
-    top1_confidence: float,
-) -> list[str]:
+def top_k_results(probs: np.ndarray, classes: list[str], k: int = 5) -> list[dict]:
+    """
+    Return the top-k predictions as a list of dicts with keys:
+        index, name, confidence
+    """
+    top_idx = np.argsort(probs)[::-1][:k]
     return [
-        f"Input decoded with OpenCV in RGB format, shape = {original_shape}.",
-        f"Image resized to {image_size} x {image_size}.",
-        f"Pixel values scaled to [0, 1], then normalized with mean={mean_values} and std={std_values}.",
-        "Model produced logits for each disease class, converted to probabilities with softmax.",
-        f"Top prediction selected as '{top1_label}' with confidence {top1_confidence * 100:.2f}%.",
+        {
+            "index":      int(i),
+            "name":       classes[i],
+            "confidence": float(probs[i]),
+        }
+        for i in top_idx
     ]
